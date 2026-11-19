@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: divyasree-wow-voice-agent
+    runtime: python
+    plan: free
+    branch: main
+    buildCommand: python -m compileall -q backend
+    startCommand: python backend/server.py
+    healthCheckPath: /healthz
+    envVars:
+      - key: CALL_MODE
+        value: demo

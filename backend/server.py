@@ -6,8 +6,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
-DB=ROOT/'data'/'voice_agent.db'
-DB.parent.mkdir(exist_ok=True)
+DB=Path(os.getenv('DATABASE_PATH',str(ROOT/'data'/'voice_agent.db')))
+DB.parent.mkdir(parents=True,exist_ok=True)
 # Load local development configuration without requiring python-dotenv.
 env_file=ROOT/'.env'
 if env_file.exists():
@@ -155,6 +155,7 @@ class Handler(BaseHTTPRequestHandler):
    if not call: return self.send(404,twiml('Thank you for your time.'),'text/xml; charset=utf-8')
    return self.send(200,twiml('Hello, this is a Divyasree property consultant calling about Whispers of the Wind in Nandi Valley, near Nandi Hills. Is now a convenient time for a brief conversation?'),'text/xml; charset=utf-8')
   if path=='/': return self.send(200,(ROOT/'frontend'/'index.html').read_bytes(),'text/html; charset=utf-8')
+  if path=='/healthz': return self.send(200,{'status':'ok'})
   if path.startswith('/assets/'): return self.send(200,(ROOT/'frontend'/path.split('/')[-1]).read_bytes(),'text/css; charset=utf-8' if path.endswith('.css') else 'application/javascript; charset=utf-8')
   if path=='/api/leads':
    with connect() as c: return self.send(200,[rowdict(x) for x in c.execute('SELECT * FROM leads ORDER BY updated_at DESC')])
@@ -237,6 +238,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
  init_db()
- print('Divyasree WOW demo running at http://localhost:8000')
- ThreadingHTTPServer(('127.0.0.1',8000),Handler).serve_forever()
+ host=os.getenv('HOST','0.0.0.0'); port=int(os.getenv('PORT','8000'))
+ print(f'Divyasree WOW demo running on {host}:{port}')
+ ThreadingHTTPServer((host,port),Handler).serve_forever()
 if __name__=='__main__': main()

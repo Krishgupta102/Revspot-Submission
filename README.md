@@ -10,6 +10,17 @@ python3 backend/server.py
 
 Open http://localhost:8000. SQLite data is stored in `data/voice_agent.db`.
 
+## Deploy a shareable demo on Render
+
+The repository includes `render.yaml` for a free Render web service. After committing and pushing the project to GitHub:
+
+1. Sign in to Render and connect the GitHub account that contains this repository.
+2. Choose **New → Blueprint** and select the project repository.
+3. Review the service named `divyasree-wow-voice-agent` and deploy it. Render reads the build command, start command, health check and safe `CALL_MODE=demo` setting from `render.yaml`.
+4. When the deploy succeeds, open the `onrender.com` URL shown on the service page and test the dashboard.
+
+The free service can sleep when idle, so its first request after a quiet period may take about a minute. Its filesystem is temporary; demo leads and calls stored in SQLite can be lost after a restart or spin-down. Use an external database or a paid persistent disk if you need records to survive. This demo deployment does not place real calls.
+
 ## Real outbound calling
 
 The Twilio adapter is opt-in. Copy `.env.example` to `.env`, set `CALL_MODE=twilio`, and configure Twilio credentials, a verified caller ID/number and a public HTTPS `BASE_URL` that can receive Twilio webhooks. Do not put real prospects into the demo without appropriate consent and calling permissions. The local demo never places a real call by default. Start a call from a lead row after configuration. Twilio voice webhooks use the same conversational state machine and gather speech via `<Gather>`.
