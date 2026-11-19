@@ -35,13 +35,29 @@ def create_lead(data):
  with connect() as c: c.execute('INSERT INTO leads(id,name,phone,email,language,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',(ident,name,data.get('phone','')[:30],data.get('email','')[:150],data.get('language','English'),t,t))
  return ident
 
-def classify(text, lang):
+def classify(text, lang, lead=None):
  s=text.lower()
  out={}
  if any(k in s for k in ['investment','invest','rental','returns','roi','निवेश']): out['intent']='Investment'
  elif any(k in s for k in ['self','live','family','weekend home','retirement','खुद','परिवार']): out['intent']='Self-use'
  if any(k in s for k in ['nandi','devanahalli','north bengaluru','nearby','comfortable with the location','नंदी','देवनहल्ली']): out['location_fit']='Yes'
  if any(k in s for k in ['too far','far away','not interested in location','location is a concern','दूर है']): out['location_fit']='No'
+ # Interpret short acknowledgements against the active location checkpoint.
+ # This keeps a later "good" about price or timing from changing location fit.
+ positive=['yes','yeah','yep','good','fine','works for me','it works','location works','the location works','works','comfortable','sure','sounds good','okay','ok','ठीक']
+ negative=['no','nope','not really','does not work','doesn’t work','doesnt work','too far']
+ if lead and lead.get('intent') and not lead.get('location_fit') and any(k in s for k in positive):
+  out.setdefault('location_fit','Yes')
+ if lead and lead.get('intent') and not lead.get('location_fit') and any(k in s for k in negative):
+  out.setdefault('location_fit','No')
+ if lead and lead.get('location_fit') and not lead.get('budget'):
+  if any(k in s for k in positive): out.setdefault('budget','Fit')
+  elif any(k in s for k in ['no','nope','not within','too expensive','cannot afford','can’t afford','cant afford']): out.setdefault('budget','Below range')
+ if lead and lead.get('location_fit') and lead.get('budget') and not lead.get('timeline'):
+  if any(k in s for k in positive): out.setdefault('timeline','Comfortable')
+  elif any(k in s for k in ['no','nope','too long','too late','not comfortable','does not work','doesn’t work','doesnt work']): out.setdefault('timeline','Concern')
+ if lead and lead.get('timeline') and not lead.get('follow_up') and any(k in s for k in positive):
+  out.setdefault('follow_up',True)
  amounts=re.findall(r'(?:₹|rs\.?\s*|inr\s*)?([0-9]+(?:\.[0-9]+)?)\s*(crore|cr|lakh|lac|लाख|करोड़)?',s)
  for n,u in amounts:
   val=float(n); unit=u.lower()
@@ -64,7 +80,7 @@ def next_question(lead):
  return None
 
 def generate_reply(lead, user_text, mode='demo'):
- facts=classify(user_text,lead.get('language','English'))
+ facts=classify(user_text,lead.get('language','English'),lead)
  if facts.get('dnc'):
   lead['do_not_call']=True
   return 'Understood. I am sorry for the interruption. I will mark your preference and end the call. Goodbye.'
@@ -72,6 +88,19 @@ def generate_reply(lead, user_text, mode='demo'):
  if facts.get('language'): lead['language']=facts['language']
  for k,v in facts.items():
   if k in ('intent','location_fit','budget','timeline','follow_up'): lead[k]=v
+ # A bare affirmative immediately after the opening greeting grants permission;
+ # move on to intent instead of treating it as an unrecognized checkpoint answer.
+ affirmative={'yes','yeah','yep','sure','okay','ok','fine'}
+ if not lead.get('intent') and user_text.strip().lower().strip('!. ') in affirmative:
+  return 'Thank you. Are you considering this for your own use, such as a weekend home, or mainly as an investment?'
+ # If nothing was understood, acknowledge that and ask the active question in
+ # simpler words rather than repeating the exact same sentence indefinitely.
+ if not facts:
+  if not lead.get('intent'): return 'Sorry, I did not catch that. Is this mainly for your own use or as an investment?'
+  if not lead.get('location_fit'): return 'Sorry, I did not catch that. Would the Nandi Hills and Devanahalli area suit you?'
+  if not lead.get('budget'): return 'Sorry, I did not catch that. Would a starting price of ₹92.4 lakh fit your budget?'
+  if not lead.get('timeline'): return 'Sorry, I did not catch that. Would possession in December 2029 work for you?'
+  if not lead.get('follow_up'): return 'Sorry, I did not catch that. Would you like a Property Expert to call you?'
  if lead.get('language')=='Hindi':
   # Hindi path preserves clear, short interactions; the English facts remain in the dashboard.
   if not lead.get('intent'): return 'समझ गई। क्या आप इसे अपने उपयोग के लिए देख रहे हैं या निवेश के लिए?'
